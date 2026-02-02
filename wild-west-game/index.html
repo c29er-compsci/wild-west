@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WILD WEST HOLD'EM - 8 PLAYER PRO</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rye&family=Bungee&family=Metal+Mania&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --wood-dark: #3e2723; --wood-medium: #5d4037; --gold: #ffd700;
+            --felt-green: #2d5016; --felt-dark: #1a3010; --cream: #f5deb3; --red: #c41e3a;
+        }
+
+        body {
+            background: radial-gradient(circle, var(--wood-medium), var(--wood-dark));
+            color: var(--cream); font-family: 'Metal Mania', cursive;
+            margin: 0; min-height: 100vh; overflow: hidden;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 10px; position: relative; }
+        h1 { font-family: 'Rye'; font-size: 2.5rem; color: var(--gold); text-shadow: 3px 3px 0 #000; text-align: center; margin: 5px; }
+        #status { font-family: 'Bungee'; color: var(--gold); text-align: center; height: 1.5em; font-size: 1.2rem; }
+
+        /* LOBBY BOX */
+        .lobby-box {
+            background: rgba(0,0,0,0.95); border: 4px solid var(--gold);
+            padding: 20px; border-radius: 15px; text-align: center; max-width: 450px; margin: 20px auto;
+            box-shadow: 0 0 30px rgba(0,0,0,1);
+        }
+        
+        .name-section { border-bottom: 2px solid var(--gold); margin-bottom: 15px; padding-bottom: 15px; }
+        input { padding: 12px; border-radius: 8px; border: none; width: 80%; margin: 10px 0; font-family: 'Bungee'; text-align: center; background: #eee; color: #000; }
+        button { padding: 10px 20px; cursor: pointer; font-family: 'Rye'; font-size: 1.1rem; background: var(--gold); border: none; margin: 5px; color: #000; font-weight: bold; }
+        button:hover { background: white; transform: scale(1.05); }
+
+        .player-count { color: var(--gold); font-family: 'Bungee'; font-size: 1.1rem; margin-top: 10px; }
+        .outlaw-list { background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; margin: 15px 0; text-align: left; max-height: 180px; overflow-y: auto; }
+        .outlaw-item { padding: 5px 10px; border-bottom: 1px solid #444; font-family: 'Rye'; display: flex; justify-content: space-between; }
+
+        /* TABLE & 8-PLAYER POSITIONS */
+        .table {
+            width: 85%; aspect-ratio: 16/9; background: radial-gradient(var(--felt-green), var(--felt-dark));
+            border: 12px solid var(--wood-medium); border-radius: 500px; position: relative;
+            margin: 20px auto; box-shadow: inset 0 0 100px #000;
+        }
+
+        .player { position: absolute; width: 120px; text-align: center; transition: all 0.5s ease; z-index: 10; }
+        .p-info { background: rgba(0,0,0,0.8); padding: 5px; border-radius: 8px; border: 2px solid transparent; font-size: 0.8rem; }
+        .player.active .p-info { border: 2px solid var(--gold); box-shadow: 0 0 15px var(--gold); }
+        .p-name { color: var(--gold); font-family: 'Rye'; }
+
+        /* Positions (Clockwise for 8 players) */
+        .pos-0 { bottom: -15%; left: 50%; transform: translateX(-50%); } 
+        .pos-1 { bottom: 10%; left: -5%; }
+        .pos-2 { top: 30%; left: -5%; }
+        .pos-3 { top: -12%; left: 20%; }
+        .pos-4 { top: -12%; left: 50%; transform: translateX(-50%); }
+        .pos-5 { top: -12%; left: 80%; transform: translateX(-50%); }
+        .pos-6 { top: 30%; right: -5%; }
+        .pos-7 { bottom: 10%; right: -5%; }
+
+        .board { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 8px; }
+        .card { width: 50px; height: 70px; background: white; border-radius: 4px; color: black; display: flex; flex-direction: column; justify-content: space-between; padding: 3px; font-weight: bold; border: 1px solid #999; font-family: sans-serif; }
+        .card.red { color: var(--red); }
+        .card.hidden { background: linear-gradient(45deg, #444, #222); border: 2px solid var(--gold); }
+
+        .controls { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 50px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🤠 WILD WEST HOLD'EM 🤠</h1>
+    <div id="status">STEP INTO THE SALOON...</div>
+
+    <div id="lobby" class="lobby-box">
+        <div class="name-section">
+            <input type="text" id="user-name" placeholder="ENTER OUTLAW NAME" maxlength="12">
+        </div>
+
+        <div id="lobby-init">
+            <button onclick="initPeer(true)">CREATE TABLE</button>
+            <div style="margin: 10px;">- OR -</div>
+            <input type="text" id="join-id" placeholder="PASTE ROOM CODE">
+            <button onclick="initPeer(false)">JOIN TABLE</button>
+        </div>
+        
+        <div id="lobby-waiting" class="hidden">
+            <div id="room-info">
+                <p>ROOM CODE: <strong id="display-id" style="color:var(--gold)">...</strong></p>
+                <button onclick="copyCode()" style="font-size: 0.8rem; padding: 5px 10px;">COPY CODE</button>
+            </div>
+            
+            <div class="player-count">GANG SIZE: <span id="count-val">1</span>/8</div>
+            <div class="outlaw-list" id="player-list"></div>
+            
+            <button id="start-btn" class="hidden" onclick="hostStartGame()">START GAME</button>
+            <p id="client-wait-msg" class="hidden" style="font-family: 'Rye'; color: var(--gold);">WAITING FOR HOST TO DEAL...</p>
+        </div>
+    </div>
+
+    <div id="game-ui" class="hidden">
+        <div class="table">
+            <div id="board" class="board"></div>
+            <div id="players-container"></div>
+        </div>
+        <div class="controls">
+            <button onclick="sendAction('fold')">FOLD</button>
+            <button onclick="sendAction('call')">CALL</button>
+            <input type="number" id="raise-val" value="50" style="width: 70px; margin: 0 5px;">
+            <button onclick="sendAction('raise')">RAISE</button>
+            <div style="margin-left: 15px; font-family: 'Rye';">POT: <span id="pot-total">$0</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let peer, myId, isHost = false;
+    let userName = "";
+    let players = []; 
+    let connections = []; 
+    let gameState = { deck: [], board: [], pot: 0, currentBet: 0, activeIdx: 0, phase: 'PREFLOP' };
+
+    const SUITS = ["♠", "♥", "♦", "♣"];
+    const VALUES = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+
+    function initPeer(host) {
+        userName = document.getElementById('user-name').value.trim();
+        if (!userName) return alert("State your name, outlaw!");
+        
+        isHost = host;
+        peer = new Peer();
+
+        peer.on('open', id => {
+            myId = id;
+            document.getElementById('lobby-init').classList.add('hidden');
+            document.getElementById('user-name').disabled = true;
+            document.getElementById('lobby-waiting').classList.remove('hidden');
+            
+            if (isHost) {
+                document.getElementById('display-id').textContent = id;
+                document.getElementById('status').textContent = "WAITING FOR POSSE...";
+                players = [{ id: myId, name: userName + " (HOST)", chips: 1000, cards: [], bet: 0, folded: false }];
+                updateLobbyUI();
+                document.getElementById('start-btn').classList.remove('hidden');
+            } else {
+                const targetId = document.getElementById('join-id').value.trim();
+                if(!targetId) return alert("You need a room code to join!");
+                
+                // LOCK UI to Host's ID
+                document.getElementById('display-id').textContent = targetId;
+                document.getElementById('status').textContent = "SADDLING UP...";
+                document.getElementById('client-wait-msg').classList.remove('hidden');
+                
+                let conn = peer.connect(targetId);
+                setupConn(conn);
+            }
+        });
+
+        peer.on('connection', c => {
+            if (isHost) {
+                connections.push(c);
+                setupConn(c);
+            }
+        });
+
+        peer.on('error', err => {
+            console.error(err);
+            alert("Saloon Error: " + err.type);
+        });
+    }
+
+    function setupConn(c) {
+        c.on('open', () => {
+            if (!isHost) c.send({ type: 'JOIN', name: userName, id: myId });
+        });
+        c.on('data', data => {
+            if (isHost) handleHostLogic(data);
+            else handleClientLogic(data);
+        });
+    }
+
+    function handleHostLogic(data) {
+        if (data.type === 'JOIN') {
+            if (players.length < 8 && !players.find(p => p.id === data.id)) {
+                players.push({ id: data.id, name: data.name, chips: 1000, cards: [], bet: 0, folded: false });
+                updateLobbyUI();
+                broadcastState();
+            }
+        }
+        if (data.type === 'ACTION') processAction(data.playerId, data.action, data.amount);
+    }
+
+    function updateLobbyUI() {
+        const list = document.getElementById('player-list');
+        list.innerHTML = players.map(p => `
+            <div class="outlaw-item">
+                <span>🤠 ${p.name}</span>
+                <span style="color:var(--gold)">READY</span>
+            </div>
+        `).join('');
+        document.getElementById('count-val').textContent = players.length;
+    }
+
+    function hostStartGame() {
+        if (players.length < 2) return alert("Need at least 2 outlaws!");
+        newHand();
+        document.getElementById('lobby').classList.add('hidden');
+        document.getElementById('game-ui').classList.remove('hidden');
+        broadcastState();
+    }
+
+    function newHand() {
+        gameState.deck = [];
+        SUITS.forEach(s => VALUES.forEach(v => gameState.deck.push({v, s})));
+        gameState.deck.sort(() => Math.random() - 0.5);
+        gameState.board = []; gameState.pot = 0; gameState.currentBet = 0;
+        players.forEach(p => {
+            p.cards = [gameState.deck.pop(), gameState.deck.pop()];
+            p.bet = 0; p.folded = false;
+        });
+        gameState.activeIdx = 0;
+    }
+
+    function processAction(pid, action, amount) {
+        let p = players.find(x => x.id === pid);
+        if (!p) return;
+        if (action === 'fold') p.folded = true;
+        if (action === 'call') {
+            let diff = gameState.currentBet - p.bet;
+            p.chips -= diff; p.bet += diff; gameState.pot += diff;
+        }
+        if (action === 'raise') {
+            p.chips -= amount; p.bet += amount; 
+            gameState.currentBet = p.bet; gameState.pot += amount;
+        }
+        gameState.activeIdx = (gameState.activeIdx + 1) % players.length;
+        broadcastState();
+    }
+
+    function broadcastState() {
+        const payload = { type: 'SYNC', players, gameState };
+        connections.forEach(c => { if(c.open) c.send(payload); });
+        renderGame();
+    }
+
+    function handleClientLogic(data) {
+        if (data.type === 'SYNC') {
+            players = data.players;
+            gameState = data.gameState;
+            updateLobbyUI();
+            if (gameState.deck.length > 0) {
+                document.getElementById('lobby').classList.add('hidden');
+                document.getElementById('game-ui').classList.remove('hidden');
+            }
+            renderGame();
+        }
+    }
+
+    function sendAction(action) {
+        let amt = parseInt(document.getElementById('raise-val').value);
+        if (isHost) {
+            processAction(myId, action, amt);
+        } else {
+            let hostConn = peer.connections[Object.keys(peer.connections)[0]][0];
+            if (hostConn) hostConn.send({ type: 'ACTION', playerId: myId, action, amount: amt });
+        }
+    }
+
+    function renderGame() {
+        if (gameState.deck.length === 0) return;
+        document.getElementById('board').innerHTML = gameState.board.map(c => renderCardHTML(c)).join('');
+        const container = document.getElementById('players-container');
+        container.innerHTML = '';
+        const myIdx = players.findIndex(p => p.id === myId);
+
+        players.forEach((p, i) => {
+            const relPos = (i - myIdx + players.length) % players.length;
+            const pDiv = document.createElement('div');
+            pDiv.className = `player pos-${relPos} ${i === gameState.activeIdx ? 'active' : ''}`;
+            pDiv.innerHTML = `
+                <div class="p-info" style="${p.folded ? 'opacity:0.5' : ''}">
+                    <div class="p-name">${p.name}</div>
+                    <div>$${p.chips}</div>
+                    <div style="color:#ff4444">${p.bet > 0 ? 'BET: $' + p.bet : ''}</div>
+                </div>
+                <div style="display:flex; justify-content:center; gap:3px; margin-top:5px">
+                    ${p.folded ? '❌' : p.cards.map(c => renderCardHTML(c, p.id !== myId)).join('')}
+                </div>`;
+            container.appendChild(pDiv);
+        });
+        document.getElementById('pot-total').textContent = `$${gameState.pot}`;
+        document.getElementById('status').textContent = (players[gameState.activeIdx]?.id === myId) ? "YOUR MOVE!" : `WAITING ON ${players[gameState.activeIdx]?.name}`;
+    }
+
+    function renderCardHTML(card, hidden) {
+        if (hidden) return `<div class="card hidden"></div>`;
+        const isRed = card.s === "♥" || card.s === "♦";
+        return `<div class="card ${isRed ? 'red' : ''}"><div>${card.v}</div><div style="font-size:1.2rem; align-self:center">${card.s}</div></div>`;
+    }
+
+    function copyCode() {
+        const id = document.getElementById('display-id').textContent;
+        navigator.clipboard.writeText(id);
+        alert("Code copied to clipboard!");
+    }
+</script>
+</body>
+</html>
